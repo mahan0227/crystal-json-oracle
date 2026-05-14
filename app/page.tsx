@@ -1,65 +1,91 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { ApiKeyBar, authHeaders, useOpenAISettings } from "@/components/ApiKeyBar";
 
 export default function Home() {
+  const settings = useOpenAISettings();
+  const { apiKey, model } = settings;
+  const [intent, setIntent] = useState(
+    "We ingest IoT telemetry batches. Each batch has device_id (uuid), readings (array of { ts: iso8601, value: number, unit: enum [c,f,pa] }), optional tags map string->string, and a checksum sha256.",
+  );
+  const [loading, setLoading] = useState(false);
+  const [output, setOutput] = useState("");
+  const [error, setError] = useState("");
+
+  async function run() {
+    setError("");
+    setOutput("");
+    if (!apiKey.trim()) {
+      setError("Add your OpenAI API key above.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/schema", {
+        method: "POST",
+        headers: authHeaders(apiKey),
+        body: JSON.stringify({ intent, model }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Request failed");
+        return;
+      }
+      setOutput(JSON.stringify(data.result ?? data, null, 2));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+    <div className="mx-auto flex min-h-full max-w-5xl flex-col gap-8 px-4 py-10 md:px-8">
+      <header className="space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-300/90">
+          Neuron suite · 07
+        </p>
+        <h1 className="text-balance text-4xl font-semibold tracking-tight md:text-5xl">
+          Crystal JSON Oracle
+        </h1>
+        <p className="max-w-2xl text-lg text-zinc-400">
+          Describe the payload you wish existed — get JSON Schema, happy-path and adversarial
+          samples, and migration notes for evolving APIs.
+        </p>
+      </header>
+
+      <ApiKeyBar settings={settings} accent="from-teal-400 to-cyan-500" />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+          <label className="block space-y-2 text-sm">
+            <span className="text-zinc-300">Intent / domain description</span>
+            <textarea
+              value={intent}
+              onChange={(e) => setIntent(e.target.value)}
+              rows={14}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm outline-none focus:border-teal-400/60"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </label>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={run}
+            className="w-full rounded-xl bg-gradient-to-r from-teal-400 to-cyan-500 px-4 py-3 text-sm font-semibold text-teal-950 shadow-lg shadow-teal-500/30 transition hover:brightness-110 disabled:opacity-50"
           >
-            Documentation
-          </a>
+            {loading ? "Crystallizing…" : "Generate schema pack"}
+          </button>
         </div>
-      </main>
+        <div className="flex min-h-[520px] flex-col gap-3 rounded-2xl border border-white/10 bg-black/40 p-5 font-mono text-xs md:text-sm">
+          <div className="flex items-center justify-between text-zinc-400">
+            <span>Schema pack</span>
+            {error ? <span className="text-rose-400">Error</span> : null}
+          </div>
+          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+          <pre className="flex-1 overflow-auto whitespace-pre-wrap text-zinc-100">{output}</pre>
+        </div>
+      </div>
     </div>
   );
 }
